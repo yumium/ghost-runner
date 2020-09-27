@@ -15,7 +15,7 @@ class Status{
 
 
 class PaceCue {
-    constructor(tol, slowURL, keepURL, fastURL) {      //it might be a good idea to have tol = 0.5 * range
+    constructor(tol, slowURL, keepURL, fastURL, user, ghost) {      //it might be a good idea to have tol = 0.5 * range
         this._tol = tol
         this._cueReady = true
         this._resetCueReadyRatio = 0.5
@@ -23,6 +23,10 @@ class PaceCue {
         this._slowAudio = new Audio(slowURL)
         this._keepAudio = new Audio(keepURL)
         this._fastAudio = new Audio(fastURL)
+
+        this._user = user
+        user._observers.push(this)
+        this._ghost = ghost
     }
 
     updateCue (userStatus, ghostStatus) {
@@ -42,16 +46,20 @@ class PaceCue {
         }
     }
     
-    update (userStatus, ghostStatus) {
-        this.updateCue(userStatus, ghostStatus)
+    update () {
+        this.updateCue(this._user.getStatus(), this._ghost.getStatus())
     }
 }
 
 class DistanceCue {
-    constructor(url, range) {
+    constructor(url, range, user, ghost) {
         this._audio = new Audio(url)
         this._audio.loop = true
         this._range = range     // Audible range. Volumn changes proportionally with distDiff within range.
+        
+        this._user = user
+        user._observers.push(this)
+        this._ghost = ghost
     }
 
     play () {
@@ -68,8 +76,8 @@ class DistanceCue {
         }
     }
 
-    update (userStatus, ghostStatus) {
-        this.resetVolumn(userStatus, ghostStatus)
+    update () {
+        this.resetVolumn(this._user.getStatus(), this._ghost.getStatus())
     }
 }
 
@@ -79,6 +87,7 @@ class GPS {
         this._pastPos = new Array(numPosTracked) //ASSUMPTION: pastPos is updated regularly, every 1-2 seconds, without a lot of outliers (outlier catcher isn't implemented)
         this._pastDist = new Array(numPosTracked - 1)  //DTI: pastDist tracks the marginal distance difference of pastPos
         this._totalDist = 0     //DTI: totalDist tracks the total distance covered from creation of GPS object till the last position object registered
+        this._observers = []
     }
 
     /** User starts running, record start time and inital position
@@ -105,6 +114,8 @@ class GPS {
         this._totalDist += extraDist
         this._pastDist.push(extraDist)
         this._pastDist.shift()
+
+        if (this.isStatusReady()) this._notifyObservers()
     }
 
     /** Return a boolean stating whether there are enough data points to generate status */
@@ -159,6 +170,12 @@ class GPS {
 
     _deg2rad(deg) {
         return deg * (Math.PI/180)
+    }
+
+    _notifyObservers () {
+        for (let i = 0; i < this._observers.length; i++) {
+            this._observers[i].update()
+        }
     }
 }
 
@@ -273,10 +290,11 @@ button.onclick = () => consent.play()
 
 //const ghost = new Ghost([3,50],[10,50],[3,50],[10,50],[3,300],[10,300])
 const ghost = new Ghost(33.33)
-
-const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 10)
-const paceCue = new PaceCue(5,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3")
 const myGPS = new GPS(5)
+
+const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 10, myGPS, ghost)
+const paceCue = new PaceCue(5,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3", myGPS, ghost)
+
 
 
 
@@ -334,8 +352,6 @@ const myFunc = () => {
         const status = myGPS.getStatus()
         const gStatus = ghost.getStatus()
         report.textContent = status.report() + `Distance difference: ${status.totalDistTravelled - gStatus.totalDistTravelled}`
-        distanceCue.update(status, gStatus)
-        paceCue.update(status, gStatus)
     } else {
         console.log("Status not yet ready.")
         report.textContent = "Status not yet ready"
