@@ -1,5 +1,18 @@
 //UNITS: Time in seconds, Pace in min/km, Distance in meters
 
+class Status{
+    constructor(splitPace,quality,totalDistTravelled,totalTimeElapsed) {
+        this.splitPace = splitPace
+        this.quality = quality
+        this.totalDistTravelled = totalDistTravelled
+        this.totalTimeElapsed = totalTimeElapsed
+    }
+
+    report () {
+        return `Pace: ${this.splitPace}, Quality: ${this.paceQuality}, Distance: ${this.totalDistTravelled}, Time: ${this.totalTimeElapsed}`
+    }
+}
+
 class PaceCue {
     constructor(tol, slowURL, keepURL, fastURL) {      //it might be a good idea to have tol = 0.5 * range
         this._tol = tol
@@ -12,7 +25,7 @@ class PaceCue {
     }
 
     updateCue (userStatus, ghostStatus) {
-        const distDiff = userStatus.totalDistanceTravelled - ghostStatus.totalDistanceTravelled
+        const distDiff = userStatus.totalDistTravelled - ghostStatus.totalDistTravelled
         if (Math.abs(distDiff) < this._tol*this._resetCueReadyRatio && !this._cueReady) {           //DTI: distDiff < tol => this._cueReady is true
             this._keepAudio.play()
             this._cueReady = true
@@ -45,7 +58,7 @@ class DistanceCue {
     }
 
     resetVolumn (userStatus, ghostStatus) {
-        const distDiff = Math.abs(userStatus.totalDistanceTravelled - ghostStatus.totalDistanceTravelled)
+        const distDiff = Math.abs(userStatus.totalDistTravelled - ghostStatus.totalDistTravelled)
         const range = this._range       
         if (distDiff <= range) {
             this._audio.volume = 1 - distDiff / range
@@ -120,12 +133,7 @@ class GPS {
                 break;
         }
 
-        return {
-            splitPace: pace,              
-            paceQuality: quality,
-            totalDistanceTravelled: this._totalDist,
-            totalTimeElapsed: (this._pastPos[length-1][2] - this._creationTime) / 1000
-        }
+        return new Status(pace, quality, this._totalDist, (this._pastPos[length-1][2] - this._creationTime) / 1000)
     }
 
     /** Helper functions that sums up the values in an array */
@@ -221,11 +229,7 @@ class Ghost {
     getStatus () {
         const timeElapsed = this._getTime()
 
-        return {
-            splitPace: this._dna[this._getSegIndex(timeElapsed)].pace,   // There is no smoothing provided here, which is fine for now as we don't use the pace at all
-            totalDistanceTravelled: this._getDistance(timeElapsed),
-            totalTimeElapsed: timeElapsed
-        }
+        return new Status(this._dna[this._getSegIndex(timeElapsed)].pace, "good", this._getDistance(timeElapsed), timeElapsed)
     }
 
     /** Helper that gets the time elapsed in seconds since start time  */
@@ -327,9 +331,10 @@ const myFunc = () => {
 
     if (myGPS.isStatusReady()) {
         const status = myGPS.getStatus()
-        report.textContent = `Pace: ${status.splitPace}, Quality: ${status.paceQuality}, Distance: ${status.totalDistanceTravelled}, Time: ${status.totalTimeElapsed}, Distance difference: ${status.totalDistanceTravelled - ghost.getStatus().totalDistanceTravelled}`
-        distanceCue.update(status, ghost.getStatus())
-        paceCue.update(status, ghost.getStatus())
+        const gStatus = ghost.getStatus()
+        report.textContent = status.report() + `Distance difference: ${status.totalDistTravelled - gStatus.totalDistTravelled}`
+        distanceCue.update(status, gStatus)
+        paceCue.update(status, gStatus)
     } else {
         console.log("Status not yet ready.")
         report.textContent = "Status not yet ready"
