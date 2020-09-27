@@ -1,7 +1,7 @@
 //UNITS: Time in seconds, Pace in min/km, Distance in meters
 
 class Status{
-    constructor(splitPace,quality,totalDistTravelled,totalTimeElapsed) {
+    constructor(splitPace, quality, totalDistTravelled, totalTimeElapsed) {
         this.splitPace = splitPace
         this.quality = quality
         this.totalDistTravelled = totalDistTravelled
@@ -9,7 +9,7 @@ class Status{
     }
 
     report () {
-        return `Pace: ${this.splitPace}, Quality: ${this.paceQuality}, Distance: ${this.totalDistTravelled}, Time: ${this.totalTimeElapsed}`
+        return `Pace: ${Math.round(this.splitPace * 100) / 100} min/km \nQuality: ${this.quality} \nDistance: ${Math.round(this.totalDistTravelled * 100) / 100}m \nTime: ${this.totalTimeElapsed}s \n`
     }
 }
 
@@ -134,13 +134,13 @@ class GPS {
 
         let quality;                    //CUSTOMIZABLE, pace quality depends on GPS reading frequency
         switch (true) {
-            case timeDiff < (3 * (length - 1)):
+            case timeDiff / (length - 1) < 3:
                 quality = "good"
                 break;
-            case timeDiff < (5 * (length - 1)):
+            case timeDiff / (length - 1) < 5:
                 quality = "OK"
                 break;
-            case timeDiff >= (5 * (length - 1)):
+            default:
                 quality = "poor"
                 break;
         }
@@ -179,10 +179,9 @@ class GPS {
     }
 }
 
-// input [pace in min/km, for dist in m], or pace in min/km which defaults to 1000m of distance. Put as many inputs as you want. They will be interpreted in chronological order.
-// Cannot give empty input
+// input [[pace1,dist1],[pace2,dist2]...]. Cannot handle empty input
 class Ghost {
-    constructor(...args) {
+    constructor(args) {
         this._dna =  this._standardize(args)
         this._startTime = null          // Date obj in ms
         this._totalRunningTime = null  // total time the ghost runs, in s
@@ -282,33 +281,41 @@ function forEvery(ms, acc, func) {
     }
 }
 
+function ask() {
+    let echo;
+    do {
+        echo = prompt("Please design ghost DNA, using format: pace1, dist2; pace2, dist2 etc. \nPace is in min:sec, distance is in meters \nFor example: 5:40, 1000; 6:00, 1000")
+    } while (!echo)
 
-const consent = new Audio("audio/250-milliseconds-of-silence.mp3")
-const button = document.querySelector("button")
-button.onclick = () => consent.play()
+    return echo
+}
 
+function adhocParser(input) {
+    const lis = input.trim().split(";")
+    console.log(lis)
+    const out = []
+    for (let i = 0; i < lis.length; i++) {
+        seg = lis[i].trim().split(",")
+        seg[0] = paceParser(seg[0].trim())
+        seg[1] = parseInt(seg[1].trim())
+        out.push(seg)
+    }
+    return out
+}
 
-//const ghost = new Ghost([3,50],[10,50],[3,50],[10,50],[3,300],[10,300])
-const ghost = new Ghost(33.33)
-const myGPS = new GPS(5)
+function paceParser(input) {
+    const part = input.split(":")
+    const res = parseInt(part[0].trim()) + parseInt(part[1].trim()) / 60
+    return Math.round(res * 100) / 100
+}
 
-const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 10, myGPS, ghost)
-const paceCue = new PaceCue(5,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3", myGPS, ghost)
-
-
-
-
-
-const geo = navigator.geolocation
-const status = document.querySelector('#text1')
-let numSuccess = 0
-status.textContent = "Success " + numSuccess
-
-const posLog = document.querySelector('#text2')
-posLog.textContent = "Last location: Waiting for location"
-
-const report = document.querySelector('#text3')
-report.textContent = "Status not yet ready"
+function readDNA(dna) {
+    str = "Your ghost DNA: \n"
+    for (let i = 0; i < dna.length; i++) {
+        str += `${i+1}. Pace: ${dna[i][0]} min/km, Distance: ${dna[i][1]}m \n`
+    }
+    return str
+}
 
 function success(pos) {
     numSuccess += 1
@@ -332,7 +339,40 @@ function error(err) {
 let options = {
     enableHighAccuracy: true,
     maximumAge: 0
-};
+}
+
+
+
+const dna = adhocParser(ask())
+const ghost = new Ghost(dna)
+const myGPS = new GPS(5)
+const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 50, myGPS, ghost)
+const paceCue = new PaceCue(25,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3", myGPS, ghost)
+const geo = navigator.geolocation
+
+
+
+
+
+
+
+const consent = new Audio("audio/250-milliseconds-of-silence.mp3")
+const button = document.querySelector("button")
+button.onclick = () => consent.play()
+
+const dnaLog = document.querySelector("#text0")
+dnaLog.textContent = readDNA(dna)
+
+const status = document.querySelector('#text1')
+let numSuccess = 0
+status.textContent = "Success " + numSuccess
+
+const posLog = document.querySelector('#text2')
+posLog.textContent = "Last location: Waiting for location"
+
+const report = document.querySelector('#text3')
+report.textContent = "Status not yet ready"
+
 
 
 
@@ -351,7 +391,7 @@ const myFunc = () => {
     if (myGPS.isStatusReady()) {
         const status = myGPS.getStatus()
         const gStatus = ghost.getStatus()
-        report.textContent = status.report() + `Distance difference: ${status.totalDistTravelled - gStatus.totalDistTravelled}`
+        report.textContent = status.report() + `Distance difference: ${Math.round((status.totalDistTravelled - gStatus.totalDistTravelled) * 100) / 100}m \n`
     } else {
         console.log("Status not yet ready.")
         report.textContent = "Status not yet ready"
