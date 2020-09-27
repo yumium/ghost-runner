@@ -1,3 +1,5 @@
+//UNITS: Time in seconds, Pace in min/km, Distance in meters
+
 class PaceCue {
     constructor(tol, slowURL, keepURL, fastURL) {      //it might be a good idea to have tol = 0.5 * range
         this._tol = tol
@@ -158,6 +160,7 @@ class Ghost {
         this._dna =  this._standardize(args)
         this._startTime = null          // Date obj in ms
         this._totalRunningTime = null  // total time the ghost runs, in s
+        this._cachedIndex = 0        // Cache the index of last segment to make access constant
     }
     
     /** A helper function that returns the standardized ghost DNA
@@ -239,15 +242,14 @@ class Ghost {
 
     /** Gives the index of the current segment we are in given time elapsed. Will return the last segment still if race has ended */
     _getSegIndex (timeElapsed) {
-        let i = 0
+        let i = this._cachedIndex
         // Invariant a[0..i].startTime < timeElapsed
         while (i+1 < this._dna.length && this._dna[i+1].startTime < timeElapsed) i++
+        this._cachedIndex = i
         return i
     }
 }
 
-
-  
 
 
 // acc = acc0 ... 1, so acc0 # of times
