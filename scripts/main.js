@@ -13,6 +13,7 @@ class Status{
     }
 }
 
+
 class PaceCue {
     constructor(tol, slowURL, keepURL, fastURL) {      //it might be a good idea to have tol = 0.5 * range
         this._tol = tol
