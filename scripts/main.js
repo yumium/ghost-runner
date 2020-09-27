@@ -284,7 +284,7 @@ function forEvery(ms, acc, func) {
 function ask() {
     let echo;
     do {
-        echo = prompt("Please design ghost DNA, using format: pace1, dist2; pace2, dist2 etc. \nPace is in min:sec, distance is in meters \nFor example: 5:40, 1000; 6:00, 1000")
+        echo = prompt("Please design ghost DNA, using format: pace1, dist1; pace2, dist2 etc. \nPace is in min:sec, distance is in meters \nFor example: 5:40, 1000; 6:00, 1000")
     } while (!echo)
 
     return echo
