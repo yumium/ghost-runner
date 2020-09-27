@@ -58,30 +58,28 @@ class DistanceCue {
 }
 
 class GPS {
-    constructor(numPosTracked) {
+    constructor(numPosTracked) {    //numPosTracked >= 2, 5 recommended
         this._creationTime = null     //ASSUMPTION: GPS signal is stabilized
         this._pastPos = new Array(numPosTracked) //ASSUMPTION: pastPos is updated regularly, every 1-2 seconds, without a lot of outliers (outlier catcher isn't implemented)
-        this._pastDist = new Array(numPosTracked - 1)  //DTI: pastDist tracks the marginal distance difference of pastPos, in meters
-        this._totalDist = 0     //DTI: totalDist tracks the total distance covered from creation of GPS object till the last position object registered, in meters
+        this._pastDist = new Array(numPosTracked - 1)  //DTI: pastDist tracks the marginal distance difference of pastPos
+        this._totalDist = 0     //DTI: totalDist tracks the total distance covered from creation of GPS object till the last position object registered
     }
 
+    /** User starts running, record start time and inital position
+     */
     start (lat, lon) {
         this._creationTime = Date.now()
         this._pastPos.push([lat, lon, this._creationTime])
         this._pastPos.shift()
     }
 
+    /** Return a boolean stating if the user has started running */
     hasStarted () {
-        const length = this._pastPos.length
-        if (this._pastPos[length-1]) {
-            return true
-        } else {
-            return false
-        }
+        return Boolean(this._pastPos[this._pastPos.length-1])
     }
 
-    /* Adds a new GPS position */
-    //Pre: hasStarted()
+    /** Adds a new GPS position of the user
+     * Pre: hasStarted() */
     addPos (lat, lon) {
         this._pastPos.push([lat,lon,Date.now()])
         this._pastPos.shift()
@@ -93,16 +91,17 @@ class GPS {
         this._pastDist.shift()
     }
 
+    /** Return a boolean stating whether there are enough data points to generate status */
     isStatusReady () {
         return this._pastPos[0] !== undefined
     }
 
-    /* Returns an object that contains the newest status */
-    // Pre: isStatusReady (which implies hasStarted())
+    /** Returns an object that contains the newest status 
+     * Pre: isStatusReady() (=> hasStarted()) */
     getStatus () {
         const length = this._pastPos.length
 
-        const timeDiff = (this._pastPos[length-1][2] - this._pastPos[0][2]) / 1000         // in seconds
+        const timeDiff = (this._pastPos[length-1][2] - this._pastPos[0][2]) / 1000
         const pace = (timeDiff / 60) / ((this._sum(this._pastDist)) / 1000)
         
 
@@ -119,20 +118,20 @@ class GPS {
                 break;
         }
 
-        console.log(quality)
         return {
-            splitPace: pace,                                                        //in min/km
+            splitPace: pace,              
             paceQuality: quality,
             totalDistanceTravelled: this._totalDist,
-            totalTimeElapsed: (this._pastPos[length-1][2] - this._creationTime) / 1000     //in seconds
+            totalTimeElapsed: (this._pastPos[length-1][2] - this._creationTime) / 1000
         }
     }
 
-    /* Helper functions that sums up the values in an array */
+    /** Helper functions that sums up the values in an array */
     _sum (arr) {
         return arr.reduce((acc,val) => acc+val)
     }
 
+    /** Helper function that implements the Haversine formula */
     _getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
         var R = 6371; // Radius of the earth in km
         var dLat = this._deg2rad(lat2-lat1);
@@ -152,8 +151,9 @@ class GPS {
     }
 }
 
+// input [pace in min/km, for dist in m], or pace in min/km which defaults to 1000m of distance. Put as many inputs as you want. They will be interpreted in chronological order.
+// Cannot give empty input
 class Ghost {
-    // input [pace in min/km, for dist in m], or pace in min/km which defaults to 1000m of distance. Put as many inputs as you want. They will be interpreted in chronological order.
     constructor(...args) {
         this._dna =  this._standardize(args)
         this._startTime = null          // Date obj in ms
@@ -161,11 +161,11 @@ class Ghost {
     }
     
     /** A helper function that returns the standardized ghost DNA
-     *  The function returs an array of segment objects, which each have 3 properties
+     *  The function returs an array of segment objects, which each have these properties
      *  pace: The pace of the segment; 
      *  distance: The distance of the segment; 
-     *  startTime: The time in seconds when the segment starts;
-     *  startDistance: The distance covered already when the segment starts */ 
+     *  startTime: The time when the segment starts; => this allows quick checking of which segment we are in
+     *  startDistance: The distance covered already when the segment starts => this precomputation makes multiple accessing fast */ 
     _standardize (args) {
         const output = []
         const firstSeg = {
@@ -190,7 +190,9 @@ class Ghost {
     }
 
 
-    // warning: starting multiple times will reset the start time and finish time each time
+    /** Function to let the ghost start running
+     * Warning: calling start() multiple times will update the starting and ending time to the newest call
+     */
     start () {
         this._startTime = Date.now()
 
@@ -198,43 +200,44 @@ class Ghost {
         this._totalRunningTime = lastSeg.startTime + lastSeg.pace * 60 / 1000 * lastSeg.distance
     }
 
+    /** Returns a boolean stating if the ghost has started running
+     */
     hasStarted () {
-        if (this._startTime) {
-            return true
-        } else {
-            return false
-        }
+        return Boolean(this._startTime)
     }
 
-    //Pre: hasStarted
+    /** Returns a boolean stating if the ghost has finished the scheduled run
+     * Pre: hasStarted()
+     */
     hasEnded () {
         return this._getTime() > this._totalRunningTime
     }
 
-    //Pre: hasStarted, !hasEnded
+    /** Return status of the ghost
+     * Pre: hasStarted(), !hasEnded() */
     getStatus () {
         const timeElapsed = this._getTime()
 
         return {
-            splitPace: this._dna[this._getSegIndex(timeElapsed)].pace,   // There is not smoothing provided here, which is fine for now as we don't use the pace at all
+            splitPace: this._dna[this._getSegIndex(timeElapsed)].pace,   // There is no smoothing provided here, which is fine for now as we don't use the pace at all
             totalDistanceTravelled: this._getDistance(timeElapsed),
             totalTimeElapsed: timeElapsed
         }
     }
 
-    /* Helper that gets the time elapsed in seconds since start time */
+    /** Helper that gets the time elapsed in seconds since start time  */
     _getTime () {
         return (Date.now() - this._startTime) / 1000
     }
 
-    /* Helper that gets the distance travelled by ghost so far in meters, extrapolated by pace in segments */
+    /** Helper that gets the distance travelled by ghost so far in meters, extrapolated by pace in segments */
     _getDistance (timeElapsed) {
         const currentSeg = this._dna[this._getSegIndex(timeElapsed)]
         const distInThisSeg = (timeElapsed - currentSeg.startTime) / (currentSeg.pace * 60 / 1000)
         return currentSeg.startDistance + distInThisSeg
     }
 
-    /* Gives the index of the current segment we are in given time elapsed. Will return the last segment still if race has ended */
+    /** Gives the index of the current segment we are in given time elapsed. Will return the last segment still if race has ended */
     _getSegIndex (timeElapsed) {
         let i = 0
         // Invariant a[0..i].startTime < timeElapsed
@@ -261,10 +264,11 @@ const button = document.querySelector("button")
 button.onclick = () => consent.play()
 
 
-const ghost = new Ghost([3,50],[10,50],[3,50],[10,50],[3,300],[10,300])
+//const ghost = new Ghost([3,50],[10,50],[3,50],[10,50],[3,300],[10,300])
+const ghost = new Ghost(33.33)
 
-const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 50)
-const paceCue = new PaceCue(25,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3")
+const distanceCue = new DistanceCue("audio/gravel-sound.mp3", 10)
+const paceCue = new PaceCue(5,"audio/slow.mp3","audio/keep.mp3","audio/fast.mp3")
 const myGPS = new GPS(5)
 
 
